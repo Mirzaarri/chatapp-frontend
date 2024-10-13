@@ -4,6 +4,7 @@ import Home from "./views/Home";
 import Error from "./Error";
 import {ProtectedRoute} from "./components";
 import { AuthComponent } from "./auth";
+import Chat from "./views/Chat";
 
 function App() {
   return (
@@ -15,6 +16,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Home />
+            </ProtectedRoute>
+          }
+        />
+         <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <Chat />
             </ProtectedRoute>
           }
         />

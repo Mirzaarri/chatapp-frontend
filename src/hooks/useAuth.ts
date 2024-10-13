@@ -24,6 +24,7 @@ export const useAuth = () => {
     setError(null);
     try {
       const userData = await login(loginData); // login returns user data with token
+      console.log(userData)
       if (userData.token) {
         sessionStorage.setItem('user', JSON.stringify(userData));
         sessionStorage.setItem('token', userData?.token); // Assuming userData contains the token
