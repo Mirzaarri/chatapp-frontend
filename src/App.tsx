@@ -1,14 +1,16 @@
 // src/App.tsx
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import Home from "./views/Home";
 import Error from "./Error";
 import {ProtectedRoute} from "./components";
 import { AuthComponent } from "./auth";
 import Chat from "./views/Chat";
+import Home from "./views/Home";
+import { SocketProvider } from "./context/socket.context";
 
 function App() {
   return (
-    <BrowserRouter>
+    <SocketProvider>
+    <BrowserRouter> 
       <Routes>
         {/* Protected Home Route */}
         <Route
@@ -19,8 +21,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-         <Route
-          path="/chat"
+        <Route
+          path="/chat/:userId"
           element={
             <ProtectedRoute>
               <Chat />
@@ -35,6 +37,7 @@ function App() {
         <Route path="*" element={<Error />} />
       </Routes>
     </BrowserRouter>
+    </SocketProvider>
   );
 }
 

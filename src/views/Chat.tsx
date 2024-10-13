@@ -1,135 +1,83 @@
 import React, { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
-import {
-  Box,
-  Button,
-  Input,
-  VStack,
-  Text,
-  HStack,
-  useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-} from '@chakra-ui/react';
+import { Box, Input, Button, VStack, Text, HStack } from '@chakra-ui/react';
+import { useLocation, useParams } from 'react-router-dom';
+import { useSocket } from '../context/socket.context'; // Use the socket context
 import { useAuth } from '../hooks';
 
 interface ChatMessage {
   userName: string;
   message: string;
 }
+const ChatWindow: React.FC = () => {
+  const { userId } = useParams(); // Get the userId (which is the socketId) from route parameters
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const recipientFromParams = queryParams.get('userName'); // Get the recipient's name from URL params
 
-interface OnlineUser {
-  socketId: string;
-  userName: string;
-}
-
-const socket: Socket = io('http://localhost:3000'); // Ensure the backend server address is correct
-
-const Chat: React.FC = () => {
-  const [message, setMessage] = useState<string>(''); // Message input
+  const socket = useSocket(); // Use the existing socket instance
   const [chat, setChat] = useState<ChatMessage[]>([]); // Chat messages array
-  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]); // Online users array
-  const [userName, setUserName] = useState<string | undefined>(''); // Current user name
-  const [receiver, setReceiver] = useState<OnlineUser | null>(null); // Selected user to chat with
+  const [message, setMessage] = useState<string>(''); // Message input
   const { user } = useAuth();
-  const { isOpen, onOpen, onClose } = useDisclosure(); // Modal state to open chatbox
- 
+  const userName = user?.name; // Get the current user's name
+  const [recipientName, setRecipientName] = useState<string>(recipientFromParams || ''); // Set recipient's name from params
+
   useEffect(() => {
-    setUserName(user?.name);
-    // Emit user joining the chat
-    socket.emit('join', user?.name);
+    if (socket && recipientName) {
+      // Listen for incoming messages
+      socket.on('message', (message: ChatMessage) => {
+        setChat((prevChat) => [...prevChat, message]);
+      });
 
-    // Listen for incoming messages
-    socket.on('message', (message: ChatMessage) => {
-      setChat((prevChat) => [...prevChat, message]);
-    });
-
-    // Listen for the list of online users
-    socket.on('onlineUsers', (users: OnlineUser[]) => {
-      setOnlineUsers(users); // Update the state with online users
-    });
+      // Emit a "join" event to fetch and show the recipient's name when the chat starts
+      socket.emit('join', userName);
+    }
 
     return () => {
-      socket.off('message');
-      socket.off('onlineUsers');
-      socket.disconnect(); // Disconnect socket on component unmount
+      if (socket) {
+        socket.off('message');
+      }
     };
-  }, [userName]);
+  }, [socket, userName, recipientName]);
 
-  // Function to send a message to a specific user
   const sendMessage = () => {
-    if (message && receiver) {
-      socket.emit('privateMessage', {
-        message,
-        to: receiver.socketId,
-      });
-      setMessage(''); // Clear the input after sending the message
+    if (message && socket) {
+      if (userName) {
+        const newMessage = { userName, message }; // Your message object
+        setChat((prevChat) => [...prevChat, newMessage]); // Add your message to the chat array
+        socket.emit('privateMessage', { message, to: userId }); // Send the message to the other user
+        setMessage(''); // Clear the input after sending the message
+      }
     }
-  };
-
-  // Handle opening the chat with a specific user
-  const startChat = (user: OnlineUser) => {
-    setReceiver(user);
-    onOpen(); // Open chat modal
   };
 
   return (
     <Box p={5}>
       <VStack align="start" spacing={4}>
         <Text fontSize="2xl" fontWeight="bold">
-          Online Users
+          Chat with {recipientName || 'User'} {/* Show the recipient's name, fallback to 'User' if not available */}
         </Text>
 
-        {onlineUsers.map((user) => (
-          <HStack key={user.socketId} justifyContent="space-between" w="100%">
-            <Text>{user.userName}</Text>
-            <Button onClick={() => startChat(user)} colorScheme="blue">
-              Message
-            </Button>
-          </HStack>
-        ))}
+        {/* Chat messages display */}
+        <VStack align="start" spacing={2} w="100%" bg="gray.100" p={3} borderRadius="md" h="400px" overflowY="scroll">
+          {chat.map((msg, index) => (
+            <Box key={index} bg={msg.userName === userName ? 'blue.100' : 'gray.200'} p={3} borderRadius="md" alignSelf={msg.userName === userName ? 'flex-start' : 'flex-end'} maxW="70%">
+              <Text textAlign={msg.userName === userName ? 'left' : 'right'}>
+                <strong>{msg.userName}:</strong> {msg.message}
+              </Text>
+            </Box>
+          ))}
+        </VStack>
 
-        {/* Modal for chat */}
-        <Modal isOpen={isOpen} onClose={onClose}>
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>Chat with {receiver?.userName}</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              <VStack align="start">
-                {/* Display chat messages */}
-                {chat.map((msg, index) => (
-                  <Box key={index} bg="gray.100" p={3} borderRadius="md" w="100%">
-                    <Text><strong>{msg.userName}:</strong> {msg.message}</Text>
-                  </Box>
-                ))}
-                {/* Input to type and send messages */}
-                <Input
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Type your message"
-                />
-              </VStack>
-            </ModalBody>
-
-            <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={sendMessage}>
-                Send Message
-              </Button>
-              <Button variant="ghost" onClick={onClose}>
-                Close
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+        {/* Message input */}
+        <HStack w="100%">
+          <Input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type your message" flex="1" />
+          <Button onClick={sendMessage} colorScheme="blue">
+            Send
+          </Button>
+        </HStack>
       </VStack>
     </Box>
   );
 };
 
-export default Chat;
+export default ChatWindow;
