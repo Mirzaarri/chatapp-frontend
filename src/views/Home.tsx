@@ -6,31 +6,32 @@ import { useSocket } from '../context/socket.context';
 
 interface OnlineUser {
   socketId: string;
+  userId: string;
   userName: string;
 }
 
-const Home: React.FC = () => {
+const Home: React.FC = () => { 
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const { user } = useAuth();
-  const socket = useSocket(); // Access the socket instance
+  const socket = useSocket();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (socket && user?.name) {
-      // Emit join event only once on initial load
-      socket.emit('join', user.name);
+    if (socket && user?._id) {
+      socket.emit('join', { userId: user._id, userName: user.name });
 
-      // Listen for updated online users list
       socket.on('onlineUsers', (users: OnlineUser[]) => {
-        // Filter out duplicate users by their socketId using a Set
-        const uniqueUsers = Array.from(new Set(users.map((u) => u.socketId)))
-          .map((socketId) => users.find((user) => user.socketId === socketId)!);
+        console.log('checking online users', users);
 
-        setOnlineUsers(uniqueUsers); // Update state with unique users
+        // Use a Map to ensure unique users based on their userId
+        const uniqueUsers = Array.from(
+          new Map(users.map((u) => [u.userId, u])).values()
+        );
+
+        setOnlineUsers(uniqueUsers);
       });
     }
 
-    // Cleanup on unmount
     return () => {
       if (socket) {
         socket.off('onlineUsers');
@@ -38,9 +39,10 @@ const Home: React.FC = () => {
     };
   }, [socket, user]);
 
-  const startChat = (userId: string, userName: string) => {
-    // Pass both userId (socketId) and userName to the chat window
-    navigate(`/chat/${userId}?userName=${encodeURIComponent(userName)}`);
+  const startChat = (recipientId: string, recipientSocketId: string, userName: string) => {
+    navigate(
+      `/chat/${recipientId}?userName=${encodeURIComponent(userName)}&recipientSocketId=${encodeURIComponent(recipientSocketId)}`
+    );
   };
 
   return (
@@ -53,8 +55,8 @@ const Home: React.FC = () => {
         {onlineUsers.map((onlineUser) => (
           <HStack key={onlineUser.socketId} justifyContent="space-between" w="100%">
             <Text>{onlineUser.userName}</Text>
-            {onlineUser.userName !== user?.name && (
-              <Button onClick={() => startChat(onlineUser.socketId, onlineUser.userName)} colorScheme="blue">
+            {onlineUser.userId !== user?._id && (
+              <Button onClick={() => startChat(onlineUser.userId, onlineUser.socketId, onlineUser.userName)} colorScheme="blue">
                 Message
               </Button>
             )}

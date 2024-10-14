@@ -1,35 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Input, Button, VStack, Text, HStack } from '@chakra-ui/react';
 import { useLocation, useParams } from 'react-router-dom';
-import { useSocket } from '../context/socket.context'; // Use the socket context
+import { useSocket } from '../context/socket.context'; 
 import { useAuth } from '../hooks';
+import { getChatHistory } from '../services/chat-service';
 
 interface ChatMessage {
-  userName: string;
+  _id?: string;
   message: string;
+  sender: { _id: string; name: string };
+  recipient: { _id: string; name: string };
 }
+
 const ChatWindow: React.FC = () => {
-  const { userId } = useParams(); // Get the userId (which is the socketId) from route parameters
+  const { userId } = useParams(); 
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
-  const recipientFromParams = queryParams.get('userName'); // Get the recipient's name from URL params
+  const recipientSocketId = queryParams.get('recipientSocketId'); 
+  const recipientName = queryParams.get('userName'); 
 
-  const socket = useSocket(); // Use the existing socket instance
+  const socket = useSocket(); 
   const [chat, setChat] = useState<ChatMessage[]>([]); // Chat messages array
   const [message, setMessage] = useState<string>(''); // Message input
   const { user } = useAuth();
-  const userName = user?.name; // Get the current user's name
-  const [recipientName, setRecipientName] = useState<string>(recipientFromParams || ''); // Set recipient's name from params
+  const userName = user?.name; 
 
   useEffect(() => {
-    if (socket && recipientName) {
-      // Listen for incoming messages
+    const getChats = async () => {
+      if (user?._id && userId) {
+        const response = await getChatHistory(user._id, userId);
+        if (response) {
+          setChat(response);
+        }
+      }
+    };
+    getChats();
+  }, [user?._id, userId]);
+
+  useEffect(() => {
+    if (socket) {
       socket.on('message', (message: ChatMessage) => {
         setChat((prevChat) => [...prevChat, message]);
       });
 
-      // Emit a "join" event to fetch and show the recipient's name when the chat starts
-      socket.emit('join', userName);
+      if (user?._id) {
+        socket.emit('join', { userId: user._id, userName });
+      }
     }
 
     return () => {
@@ -37,32 +53,49 @@ const ChatWindow: React.FC = () => {
         socket.off('message');
       }
     };
-  }, [socket, userName, recipientName]);
+  }, [socket, userName, user?._id]);
 
   const sendMessage = () => {
-    if (message && socket) {
-      if (userName) {
-        const newMessage = { userName, message }; // Your message object
-        setChat((prevChat) => [...prevChat, newMessage]); // Add your message to the chat array
-        socket.emit('privateMessage', { message, to: userId }); // Send the message to the other user
-        setMessage(''); // Clear the input after sending the message
-      }
+    if (message && socket && user) { // Ensure user is defined
+      if (userName && userId && recipientName) {
+        const newMessage: ChatMessage = {
+          message,
+          sender: { _id: user._id, name: userName },
+          recipient: { _id: userId, name: recipientName },
+        };
+
+        // Update the chat state with the new message
+        setChat((prevChat) => [...prevChat, newMessage]); 
+        
+        // Emit the message to the recipient
+        socket.emit('privateMessage', { message, to: recipientSocketId });
+        
+        // Clear the message input
+        setMessage(''); 
     }
-  };
+  }
+  }
 
   return (
     <Box p={5}>
       <VStack align="start" spacing={4}>
         <Text fontSize="2xl" fontWeight="bold">
-          Chat with {recipientName || 'User'} {/* Show the recipient's name, fallback to 'User' if not available */}
+          Chat with {recipientName || 'User'}
         </Text>
 
         {/* Chat messages display */}
         <VStack align="start" spacing={2} w="100%" bg="gray.100" p={3} borderRadius="md" h="400px" overflowY="scroll">
-          {chat.map((msg, index) => (
-            <Box key={index} bg={msg.userName === userName ? 'blue.100' : 'gray.200'} p={3} borderRadius="md" alignSelf={msg.userName === userName ? 'flex-start' : 'flex-end'} maxW="70%">
-              <Text textAlign={msg.userName === userName ? 'left' : 'right'}>
-                <strong>{msg.userName}:</strong> {msg.message}
+          {user && chat?.map((msg) => (
+            <Box
+              key={msg?._id}
+              bg={msg?.sender?._id === user?._id ? 'blue.100' : 'gray.200'}
+              p={3}
+              borderRadius="md"
+              alignSelf={msg?.sender?._id === user?._id ? 'flex-start' : 'flex-end'}
+              maxW="70%"
+            >
+              <Text textAlign={msg?.sender?._id === user?._id ? 'left' : 'right'}>
+                <strong>{msg?.sender?.name}:</strong> {msg?.message}
               </Text>
             </Box>
           ))}
