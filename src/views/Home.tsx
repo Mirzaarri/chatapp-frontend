@@ -9,8 +9,7 @@ interface OnlineUser {
   userId: string;
   userName: string;
 }
-
-// Define a list of languages
+ 
 const languages = [
   { code: 'en', name: 'English' },
   { code: 'es', name: 'Spanish' },
@@ -67,15 +66,18 @@ const Home: React.FC = () => {
   return (
     <Box p={5}>
       <VStack align="start" spacing={4}>
+        
+
+        {/* Dropdown for selecting preferred language */}
+        {!selectedUser &&  
+        <>
         <Text fontSize="2xl" fontWeight="bold">
           Online Users
         </Text>
-
-        {/* Dropdown for selecting preferred language */}
         <Select
           placeholder="Select language"
           value={preferredLanguage}
-          onChange={handleLanguageChange}
+          onChange={handleLanguageChange} 
           mb={4}
         >
           {languages.map((lang) => (
@@ -84,6 +86,9 @@ const Home: React.FC = () => {
             </option>
           ))}
         </Select>
+        </>
+        }
+       
 
         {selectedUser ? (
           <ChatWindow
